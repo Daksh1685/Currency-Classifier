@@ -5,6 +5,7 @@ from gtts import gTTS
 import tempfile
 import os
 import base64
+from skimage.exposure import equalize_adapthist
 
 # Use TensorFlow Lite if available, otherwise fall back to TensorFlow
 try:
@@ -70,8 +71,6 @@ def get_session_state():
 
 def preprocess_image(img_array):
     """Apply histogram equalization preprocessing"""
-    from skimage.exposure import equalize_adapthist
-    
     # Ensure image is float32 in range [0, 1]
     if img_array.max() > 1:
         img_array = img_array / 255.0
