@@ -6,13 +6,6 @@ import tempfile
 import os
 import base64
 
-# Optional: Use scikit-image if available
-try:
-    from skimage.exposure import equalize_adapthist
-    HAS_SKIMAGE = True
-except:
-    HAS_SKIMAGE = False
-
 # Use TensorFlow Lite if available, otherwise fall back to TensorFlow
 try:
     import tflite_runtime.interpreter as tflite
@@ -76,31 +69,17 @@ def get_session_state():
     }
 
 def preprocess_image(img_array):
-    """Apply histogram equalization preprocessing"""
+    """Apply simple normalization preprocessing"""
     # Ensure image is float32 in range [0, 1]
     if img_array.max() > 1:
         img_array = img_array / 255.0
     
-    if HAS_SKIMAGE:
-        # Apply histogram equalization per channel with skimage
-        processed = np.zeros_like(img_array)
-        for channel in range(3):
-            processed[:, :, channel] = equalize_adapthist(img_array[:, :, channel], clip_limit=0.03)
-        
-        # Clip to [0.02, 0.98] percentile and normalize
-        p2, p98 = np.percentile(processed, (2, 98))
-        processed = np.clip(processed, p2, p98)
-        processed = (processed - processed.min()) / (processed.max() - processed.min() + 1e-6)
-        
-        return processed
-    else:
-        # Simple normalization fallback (when skimage not available)
-        # Clip to [0.02, 0.98] percentile
-        p2, p98 = np.percentile(img_array, (2, 98))
-        processed = np.clip(img_array, p2, p98)
-        processed = (processed - processed.min()) / (processed.max() - processed.min() + 1e-6)
-        
-        return processed
+    # Simple percentile clipping and normalization
+    p2, p98 = np.percentile(img_array, (2, 98))
+    processed = np.clip(img_array, p2, p98)
+    processed = (processed - processed.min()) / (processed.max() - processed.min() + 1e-6)
+    
+    return processed
 
 def predict_currency(image_path):
     """Make prediction on the image using TFLite or Keras"""
