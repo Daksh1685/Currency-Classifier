@@ -13,7 +13,7 @@ try:
 except:
     USE_TFLITE = False
     import tensorflow as tf
-    from tensorflow.keras.models import load_model
+    from tensorflow.keras.models import load_model as keras_load_model
     from tensorflow.keras.preprocessing.image import load_img, img_to_array
 
 # Page configuration
@@ -42,14 +42,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 @st.cache_resource
-def load_model():
+def load_model_func():
     """Load model (TFLite or Keras)"""
     if USE_TFLITE:
         interpreter = tflite.Interpreter(model_path="best_currency_classifier.tflite")
         interpreter.allocate_tensors()
         return interpreter
     else:
-        from tensorflow.keras.models import load_model as keras_load_model
         return keras_load_model('best_currency_classifier.h5')
 
 @st.cache_resource
@@ -69,30 +68,56 @@ def get_session_state():
     }
 
 def preprocess_image(img_array):
-    """Apply simple normalization preprocessing"""
-    # Ensure image is float32 in range [0, 1]
-    if img_array.max() > 1:
-        img_array = img_array / 255.0
+    """Apply enhanced preprocessing matching tkinter (histogram equalization per channel)"""
+    # Convert to float32 for better precision
+    img = img_array.astype(np.float32)
     
-    # Simple percentile clipping and normalization
-    p2, p98 = np.percentile(img_array, (2, 98))
-    processed = np.clip(img_array, p2, p98)
-    processed = (processed - processed.min()) / (processed.max() - processed.min() + 1e-6)
+    # Normalize to [0, 1]
+    img = img / 255.0
     
-    return processed
+    # Apply histogram equalization per channel (SAME AS TKINTER)
+    for channel in range(3):
+        img_channel = img[:, :, channel]
+        p2, p98 = np.percentile(img_channel, (2, 98))
+        img[:, :, channel] = np.clip(img_channel, p2, p98)
+        img[:, :, channel] = (img_channel - p2) / (p98 - p2 + 1e-7)
+    
+    # Ensure values are in [0, 1]
+    img = np.clip(img, 0, 1)
+    
+    return img
 
 def predict_currency(image_path):
     """Make prediction on the image using TFLite or Keras"""
     try:
-        model = load_model()
+        model = load_model_func()
         session_state = get_session_state()
         
-        # Load image using PIL
-        img = Image.open(image_path).convert('RGB')
-        img = img.resize((session_state['image_size'], session_state['image_size']))
-        img_array = np.array(img, dtype=np.float32)
+        # Handle both file paths and file objects
+        if isinstance(image_path, str):
+            # Direct file path
+            img = load_img(image_path, target_size=(session_state['image_size'], session_state['image_size']))
+            img_array = img_to_array(img)
+        else:
+            # Streamlit file uploader object - save to temp first
+            import tempfile
+            file_name = image_path.name if hasattr(image_path, 'name') else 'image.jpg'
+            file_ext = os.path.splitext(file_name)[1] if file_name else '.jpg'
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp:
+                tmp.write(image_path.getbuffer())
+                tmp_path = tmp.name
+            
+            # Load using Keras (SAME AS TKINTER for consistency)
+            img = load_img(tmp_path, target_size=(session_state['image_size'], session_state['image_size']))
+            img_array = img_to_array(img)
+            
+            try:
+                os.unlink(tmp_path)
+            except:
+                pass
         
-        # Apply preprocessing
+        # Apply enhanced preprocessing (SAME AS TKINTER)
         processed_img = preprocess_image(img_array)
         img_array = np.expand_dims(processed_img, axis=0).astype(np.float32)
         
