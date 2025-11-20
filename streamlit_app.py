@@ -49,11 +49,8 @@ def load_model():
         interpreter.allocate_tensors()
         return interpreter
     else:
-        return load_model_keras()
-
-def load_model_keras():
-    """Load Keras model"""
-    return load_model('best_currency_classifier.h5')
+        from tensorflow.keras.models import load_model as keras_load_model
+        return keras_load_model('best_currency_classifier.h5')
 
 @st.cache_resource
 def get_session_state():
