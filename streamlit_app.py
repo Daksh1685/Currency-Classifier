@@ -6,8 +6,15 @@ import tempfile
 import os
 import base64
 
-# TensorFlow Lite runtime (much lighter!)
-import tflite_runtime.interpreter as tflite
+# Use TensorFlow Lite if available, otherwise fall back to TensorFlow
+try:
+    import tflite_runtime.interpreter as tflite
+    USE_TFLITE = True
+except:
+    USE_TFLITE = False
+    import tensorflow as tf
+    from tensorflow.keras.models import load_model
+    from tensorflow.keras.preprocessing.image import load_img, img_to_array
 
 # Page configuration
 st.set_page_config(page_title="Currency Classifier", layout="centered", initial_sidebar_state="collapsed")
@@ -36,10 +43,17 @@ st.markdown("""
 
 @st.cache_resource
 def load_model():
-    """Load TensorFlow Lite model"""
-    interpreter = tflite.Interpreter(model_path="best_currency_classifier.tflite")
-    interpreter.allocate_tensors()
-    return interpreter
+    """Load model (TFLite or Keras)"""
+    if USE_TFLITE:
+        interpreter = tflite.Interpreter(model_path="best_currency_classifier.tflite")
+        interpreter.allocate_tensors()
+        return interpreter
+    else:
+        return load_model_keras()
+
+def load_model_keras():
+    """Load Keras model"""
+    return load_model('best_currency_classifier.h5')
 
 @st.cache_resource
 def get_session_state():
@@ -78,9 +92,9 @@ def preprocess_image(img_array):
     return processed
 
 def predict_currency(image_path):
-    """Make prediction on the image using TFLite"""
+    """Make prediction on the image using TFLite or Keras"""
     try:
-        interpreter = load_model()
+        model = load_model()
         session_state = get_session_state()
         
         # Load image using PIL
@@ -92,26 +106,22 @@ def predict_currency(image_path):
         processed_img = preprocess_image(img_array)
         img_array = np.expand_dims(processed_img, axis=0).astype(np.float32)
         
-        # Get input and output tensors
-        input_details = interpreter.get_input_details()
-        output_details = interpreter.get_output_details()
-        
-        # Set input tensor
-        interpreter.set_tensor(input_details[0]['index'], img_array)
-        interpreter.invoke()
-        
-        # Get predictions
-        predictions_raw = interpreter.get_tensor(output_details[0]['index'])[0]
+        if USE_TFLITE:
+            # TFLite inference
+            input_details = model.get_input_details()
+            output_details = model.get_output_details()
+            
+            model.set_tensor(input_details[0]['index'], img_array)
+            model.invoke()
+            
+            predictions_raw = model.get_tensor(output_details[0]['index'])[0]
+        else:
+            # Keras inference
+            predictions_raw = model.predict(img_array, verbose=0)[0]
         
         predicted_class = np.argmax(predictions_raw)
-        
-        # Get sorted predictions
         sorted_indices = np.argsort(predictions_raw)[::-1]
-        
-        # Top 2 difference
         top_2_diff = predictions_raw[sorted_indices[0]] - predictions_raw[sorted_indices[1]]
-        
-        # Simple validation
         is_valid = top_2_diff >= 0.01
         
         return is_valid, predicted_class, predictions_raw, sorted_indices
