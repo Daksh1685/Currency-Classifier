@@ -13,12 +13,12 @@ A deep learning model that classifies Indian currency denominations (₹10, ₹2
 ## Project Structure
 
 ```
-├── currency_classifier_gui.py      # Desktop GUI application (Tkinter)
-├── streamlit_app.py                # Web interface (Streamlit)
-├── best_currency_classifier.h5     # Trained model (Keras format)
-├── best_currency_classifier.tflite # Optimized model (TensorFlow Lite)
-├── requirements.txt                # Python dependencies
-├── .streamlit/                      # Streamlit configuration
+├── currency_classifier_gui.py     
+├── streamlit_app.py               
+├── best_currency_classifier.h5    
+├── best_currency_classifier.tflite
+├── requirements.txt               
+├── .streamlit/                      
 └── .gitignore
 ```
 
